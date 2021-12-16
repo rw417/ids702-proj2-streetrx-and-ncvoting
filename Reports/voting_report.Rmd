@@ -1,0 +1,227 @@
+---
+title: \vspace{-1.5cm} Modeling Turnout in the North Carolina 2020 Election
+author: |
+  | Raza Lamb (Coordinator), Robert Wan (Writer)
+  | Team: Erika Fox (Programmer), Minjung Lee (Presenter), Preet Khowaja (Checker)
+date: "10/24/2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(webshot)
+library(ggplot2)
+library(tidyverse)
+library(arm)
+library(pROC)
+library(rms)
+library(e1071)
+library(caret)
+require(gridExtra)
+library(leaps)
+library(lme4)
+library(dplyr)
+library(stargazer)
+# load package
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(png)
+```
+
+```{r, include = FALSE, echo = FALSE}
+# Importing/Cleaning Data
+voters <- read.delim("Data/voter_stats_20201103.txt")
+voter_hist <- read.delim("Data/history_stats_20201103.txt")
+
+# selecting a random sample of 25 counties
+sample_list <- unique(voters[c("county_desc")])
+set.seed(4747)
+counties <- sample_n(sample_list, 25)[,]
+voter_hist <- voter_hist[is.element(voter_hist$county_desc,counties),]
+voters <- voters[is.element(voters$county_desc,counties),]
+
+aggregated_data <- aggregate(voter_hist$total_voters, 
+                             list(county_desc=voter_hist$county_desc,
+                                  age= voter_hist$age, 
+                                  party_cd=voter_hist$voted_party_cd, 
+                                  ethnic_code=voter_hist$ethnic_code, 
+                                  race_code=voter_hist$race_code, 
+                                  sex_code=voter_hist$sex_code),sum)
+
+colnames(aggregated_data)[7] <- c("turnout")
+
+voters_agg <- aggregate(voters$total_voters, 
+                        list(county_desc=voters$county_desc,
+                             age= voters$age, 
+                             party_cd=voters$party_cd, 
+                             ethnic_code=voters$ethnic_code,
+                             race_code=voters$race_code, 
+                             sex_code=voters$sex_code),sum)
+colnames(voters_agg)[7] <- c('total_voters')
+
+new <- left_join(aggregated_data, voters_agg, by = c('county_desc', 'age', 'party_cd', 'ethnic_code', 'race_code', 'sex_code'), copy = FALSE, suffix = c(".x", ".y"),)
+new <- drop_na(new)
+bool <- new$turnout > new$total_voters
+
+new[which(bool), "turnout"] <- new[which(bool), "total_voters"]
+colnames(new)[8] <- c("registered_count")
+new$per_turnout <- (new$turnout/new$registered_count) * 100
+
+
+
+
+```
+## Summary
+
+Through utilization of a hierarchical aggregated logistic regression model we analyzed data from the North Carolina State Board of Elections to determine how demographic factors and location affect odds of voting (i.e. voter turnout) in a subset of counties in North Carolina. The analysis demonstrated that the baseline probability of voting varies widely by county, from 47% to 68%. We also discovered that several demographic factors strongly influence turnout, including, ethnicity, race, age, and party affiliation.
+
+## Introduction
+
+Despite the COVID-19 pandemic, the United States 2020 presidential election had the highest voter turnout of the 21st century, according to [Census data](https://www.census.gov/newsroom/press-releases/2021/2020-presidential-election-voting-and-registration-tables-now-available.html). There are many potential reasons for this, but the United States has an incredibly diverse landscape, and the turnout in the 2020 election could be driven by any number of factors. One specific insight that we hope to gain here is the effect of demographic variables and location on voter turnout.
+
+In this analysis, we investigated the relationship between turnout in the 2020 U.S. presidential election and various demographic factors in North Carolina. The data used in this report derives from two separate precinct-level data sets from the North Carolina State Board of Elections—one consisting of votes and another consisting of registered voters. We utilized a hierarchical logistic regression model to examine how specific demographic factors, in addition to location (county), affect the odds of a registered voter voting in the election. Specifically, the questions of interest included:
+
+* How did different demographic subgroups vote in the 2020 general elections in North Carolina?
+* Did the overall probability or odds of voting differ by county in 2020? Which counties differ the most from other counties?
+* How did the turnout rates differ between females and males for the different party affiliations?
+* How did the turnout rates differ between age groups for the different party affiliations?
+
+## Data
+
+As mentioned previously, the data employed in this analysis was initially in two separate data sets, both available from the North Carolina State Board of Elections (NCSBE). In both cases, the data is in aggregate form: each row represents an aggregated number of voters by demographic characteristics and location. Due to this format, the data required a significant amount of data preparation before beginning exploratory data analysis.
+
+### Data Preparation
+
+In order to make this analysis more manageable, we set the seed at 4747 and took a random sample of 25 counties out of North Carolina's 100 total counties. Then we subset both the registration and the turnout data sets. After this, there were 180,011 observations in the dataset containing turnout and 112,880 observations in the dataset containing registered voters. Having subset the data, we noticed that the data set on voters from the 2020 election includes 3 more variables than the data on registered voters. These variables are: $voting\_method$, $voting\_method\_desc$, and $voted\_party\_cd$. Further examination showed that $voting\_method$ and $voting\_method\_desc$ are identical in the subset. These variables describe the method by which the aggregated voter counts voted, i.e. in-person, curbside, etc. Intuitively, the registration data will not having a matching variable. Thus, before merging the data, we aggregated the voters data further, collapsing the $voting\_method$ column. As discussed in the next section, we also decided to collapse both datasets by precinct, before merging. After this aggregation, the turnout data set had 11,296 observations, and the registration data set had 12,818 observations. Following this, we performed a left join, with the voters data on the left and the registration data on the right. This is due to the fact that we observed several rows (~1500) in the registration data that do not have a matching row in the voter data, due to no voters with those demographic characteristics in the 2020 election.
+
+After aggregating the voting data and joining it with the registered voter data set, we ensured that our data had been joined correctly. First of all, we checked for any missing values. We found 17 rows with missing values, and in each case the missing value was in the registered voter count. What this indicated was that there were demographic aggregates of voters who had a zero count in registration, and therefore not in the data set. There are a few reasons for this to occur, including the fact that voters can move and not update their registration, or that voters can register on the day of the election. However, because we do not have a registration figure for these voters, we simply drop these observations from the data. In a similar vein, we also examined the data for situations in which turnout exceeds registered count, for which there were 7 rows. When examining these rows, we see that in every case turnout exceeds registered voters by only one vote, and the total number of registered voter in each row is 7 or fewer. Because this is not a reasonable outcome to model (turnout cannot exceed 100%), we decided to reset these values so that turnout is equal to the number of registered voters in this row. While this may not be ideal, due to the very small magnitude of the change, we do not believe this affected the analysis. The final data was ready for EDA and contained 11,279 observations.
+
+### Exploratory Data Analaysis
+
+After data cleaning and preparation, we proceeded to conduct exploratory data anlaysis. We created a variable, $per\_turnout$, representing percent turnout for each row in the data. In addition to this response variable, there were 7 potential predictors in the data set, all categorical variables. These were:
+
+**Code book:**
+
+* $county\_desc$: county in North Carolina
+* $precinct\_abbrv$: precinct within the county
+* $age$: age of voter, divided into four categories
+* $party\_cd$: political party of voter
+* $race\_code$: race of voter
+* $ethnic\_code$: ethnicity of voter (i.e. Hispanic/Latino)
+* $sex\_code$: sex of voter
+
+Initially, in the exploratory analysis, we noticed that many precincts had very few voters, so we decided to exclude this variable from the analysis. Another important aspect of the data that we discovered was that many voters have unknown demographic variables. For example, 8% of all voters in the 2020 election have unknown sex, while 25% have unknown ethnicity. Another concerning aspect of the data noted here is that while the age and sex are well balanced, other predictor variables have at least one category with relatively few observations. This was important to consider when examining interactions between demographic variables.
+
+For all of the other variables, we examined the potential relationship between percent turnout and the categorical variables through box-plots. The EDA revealed several relationships that directed the subsequent modeling process. There was significant variation in the turnout rate by county, with turnout rate ranging from 61% to 82% — overall turnout in the sample of 25 counties was 74%. We also noted that men have lower turnout than women and Hispanic voters have lower turnout than non-Hispanic voters. When examining age, there was a clear trend: as age increases, so does voter turnout. However, this trend does not look linear—the effect between the last two age groups, 41-65 and 66+, is much less pronounced. The variable encoding race also showed an interesting trend. White, Asian, Native American, and unknown voters have similar turnout rates, while black, mixed, and other voters have lower turnout rates. Native Hawaiian/Pacific Islanders have a very high turnout rate, but with a very small sample size. Finally, we examined how party affects registered voter turnout. While this is an unbalanced variable, we noticed that Republicans appear to have the highest voter turnout, with other parties (especially Libertarians and unaffiliated voters) lagging behind.
+
+Following an analysis of potential predictors, we continued to examine potential interactions between these categorical variables. One interaction that showed potential was the interaction between race and sex, included below. For the purpose of interpretation, we have condensed the graph to show only the relationship between white/black voters and male/female, excluding several categories with few observations. Visibly, the trend for both women and men is similar: black voters, on average, have lower turnout. The notable interaction here is that the difference is remarkably less pronounced for women voters. We also investigated whether or not the demographic voting trends vary by county. In many cases, this was difficult to interpret, since we were visualizing 25 different counties. We only noted one interaction that was potentially interesting: race and county. 
+
+```{r interaction between race and sex, figures-side, fig.cap = "Interaction between Race and Sex", fig.show="hold", out.width="60%", fig.align = 'center',echo = FALSE}
+race_sex <- aggregate(new[,c('turnout', 'registered_count')], by=list(race = new$race, sex = new$sex_code, county = new$county_desc), FUN=sum)
+race_sex$per_turnout <- race_sex$turnout/race_sex$registered_count
+lim <- race_sex %>% filter(race %in% c('B', 'W'))
+lim <- lim %>% filter(sex %in% c('M', 'F'))
+lim$race <- factor(lim$race, levels = c("B", "W"), labels = c("Black", "White"))
+lim$sex <- factor(lim$sex, levels = c("F", "M"), labels = c("Female", "Male"))
+ggplot(lim, aes(x=race, y = per_turnout, fill = race)) + geom_boxplot() + facet_wrap(~sex) + theme_classic() + scale_fill_manual(values = c("plum4", "plum2"))
+```
+
+Before moving on to modeling, we decided to condense some of the variables categorically, since several parties have very few voters. To account for this, we created a new category: "other", and placed the three minor parties into this category (i.e. Constitution, Green, and Libertarian). For the variable $race\_code$, we also noticed an unbalanced ratio. There were more than 950,000 white voters in our data, more than 260,000 black voters, and more than 141,000 voters with unknown race. However, in the remaining 5 more categories, each had less than 35,000 voters registered. Consequently, we collapsed these 5 race categories (Asian, Mixed, Native American, Other, and Pacific Islander) into one "other" category.
+
+```{r, echo = FALSE, include = FALSE}
+# combine LIB, GRE, CST parties
+small_parties <- c("LIB","GRE","CST")
+new$party_cd_combined <- new$party_cd
+new[is.element(new$party_cd_combined, small_parties),]$party_cd_combined <- 'LIB_GRE_CST'
+
+# combine race
+small_races <- c('A', 'M', 'P','I','O')
+new$race_code_combined <- new$race_code
+new[is.element(new$race, small_races),'race_code_combined'] <- 'Other'
+
+new$party <- factor(new$party_cd_combined, levels = c('DEM', 'REP', 'LIB_GRE_CST', 'UNA'), labels = c('Democrat', 'Republican', 'Other', 'Unafilliated'))
+new$ethnicity <- factor(new$ethnic_code, levels = c('NL', 'HL', 'UN'), labels = c('Not Hispanic', 'Hispanic', 'Unknown'))
+new$race <- factor(new$race_code_combined, levels = c('W', 'B', 'Other', 'U'), labels = c('White', 'Black', 'Other', 'Unknown'))
+new$sex <- factor(new$sex_code, levels = c('F', 'M', 'U'), labels = c('Female', 'Male', 'Unknown'))
+new$age <- factor(new$age, levels = c('Age 18 - 25', 'Age 26 - 40', 'Age 41 - 65', 'Age Over 66'), labels = c('18-25', '26-40', '41-65', '66+'))
+
+# change baseline
+new$ethnicity <- relevel(new$ethnicity, ref="Not Hispanic")
+new$race <- relevel(new$race, ref="White")
+
+```
+
+## Model
+```{r, echo = FALSE}
+final_model <- readRDS("final_model")
+```
+
+The final model we selected is a hierarchical aggregated logistic regression model with both varying-intercepts and varying-slopes, shown below. In this model, each county has it's distinct intercept, centered around the grand mean, and the slope for each race category also differs by county, again, centered around a grand mean.
+
+$$y_i | x_i \sim \textrm{Bin}(n_i,\pi_i);$$
+$$\log(\frac{\pi_i}{1-\pi_i}) = \beta_{0} + \gamma_{0j} + \beta_1 party\_cd_{ij}+ (\beta_2+\gamma_{rj}) race\_code_{ij} + \beta_3 ethnic\_code_{ij}+ \beta_4 age_{ij} $$
+$$+ \beta_5 sex\_code_{ij}+ \beta_6 sex\_code_{ij} : party\_code_{ij} + \beta_7 age_{ij} : party\_code_{ij} + \beta_8 sex\_code_{ij} : race\_code_{ij};$$
+$$\gamma_{0j} \sim N(0, \sigma_{county}^2), \gamma_{0r} \sim N(0, \tau_{race\_code}^2).$$
+
+### Model Selection
+
+After conducting EDA, the model we initially started with was the one depicted above. In terms of fixed effects, we included all demographic variables and three interactions: sex and party, age and party, and sex and race. The first two enable us to answer our questions of interest, and the last interaction was observed during the EDA. For random effects, we included a varying-intercept by county and a varying-slope for race by county. In order to perform model selection, we first focused on fixed effects. To test this, we simply created a null model, which was identical, except for the exclusion of the interaction between sex and race. After performing a Chi-Squared test between these two models, we found that the original model was significantly better at the 95% confidence level. Hence, we decided to utilize the extra interaction, and moved on to setting the random effects. For this, we set a null model using **only** a varying-intercept, as opposed to a varying-intercept **and** slope. To compare these models, we compared the AIC value for each model, and discovered that once again, the full model had a noticeably decreased AIC value. Hence, we selected the final model depicted above.
+
+### Model Results
+
+The output of the final model is included in Appendix 1. Using the final model, we were able to answer our inferential questions. First, we can interpret the random effects, using the plot in Appendix 2 and the table in Appendix 1. The overall intercept for this model is 0.51, which when converted to the probability scale, tells us that the probability of voting for a registered voter in the baseline categories (white, female, non-Hispanic, Democrat, age 18-25) is 63% overall. Each individual county has its own random effect that changes this baseline level. Based on the plot in Appendix 2, we can see that this intercept varies by county, and nearly all are significant at the 95% level, based on the confidence bands. For example, the probability of voting for an individual with baseline characteristics in Onslow county is only 47%, while the probability for the same individual in Carteret county is 68%. 
+
+In addition to varying-intercepts, this model as has varying slopes for race by county. These plots, also included in the appendix, display how the coefficient for each individual race, i.e. black, mixed, other, vary by county. One valuable insight from these slopes is that the distribution of slopes for Black voters is much tighter around the mean than for voters of either unknown race or other race. This observation is confirmed by the standard deviation of the random effects: the standard deviation for the slopes for Black voters represents less than 20% of variation of all slopes for race. One plausible interpretation of this is that this model is likely capturing the different races captured in the other and unknown group, and their distribution across counties. For example, an "other" or "unknown" population in a given county may be skewed towards one race, which has a higher or lower turnout rate. This points to the fact that we did not have sufficient data to fully evaluate the various race categories.
+
+Continually, we also interpreted the fixed effects to determine how effects range by demographics. We visualized the interaction effects using predicted probabilities. For each of the three interactions in our model, we created a visualization. The plots for the interactions between sex and party and age and party are included in Appendix 3. In these plots, we can see that while the effects may be statistically significant, the interactions do not have much scientific significance. In other words, the trend in voting by sex and by age does not differ by party. On the other hand, the graph below depicts the predicted probability of voting broken down by sex and race. Here, clearly the the odds of voting by race differs by sex. Black men are significantly less likely than white men to vote, while black women have turnout much closer to white women, with all other factors held at the baseline.
+
+```{r dotplot, figures-side, fig.cap = "Interatcion of Sex and Race", fig.show="hold", out.width = '60%', fig.align = 'center',echo = FALSE, message = FALSE,  results='hide'}
+final_model <- readRDS("final_model")
+set_theme(base = theme_classic(), axis.title.size = .9, axis.textsize = .9, legend.size = .7, legend.title.size = .8, geom.label.size = 3)
+plot_model(final_model, type = 'int', terms = c('sex', 'race'), title = 'Predicted Probabilities of Voting by Sex and Race', axis.title = list('Sex', 'Probability of Voting'))[3]
+```
+
+
+## Conclusion
+
+We then summarized our findings and answered the inferential questions. The probability of voting differs by demographic groups. The clearest trend is that as age increases, the predicted probability of voting, especially once someone is greater than 41 years old, decreases. Continually, Hispanic voters are less likely to vote than non-Hispanic voters. Republicans are the most likely political party to vote, compared to Democrats, other parties, and unaffiliated voters. We were also able to definitively state that the odds of voting differ by county, with a wide potential range of turnout. 
+
+The final two questions of interest deal with the plots included in Appendix 3. Interestingly, Male and Female voters have nearly identical turnout when split up by party. When investigating the interaction between political party and age, we found that the trend is again very similar by party—generally, turnout increases with age. However, there are some subtle differences. For example, for Republican and unaffiliated voters, the difference between the 18-25 and 26-40 age groups is significant, while in other groups the difference is not (but trending in the same direction).
+
+### Limitations
+
+While the results from this analysis are interesting and provide valuable insights into the effect of location and demographic groups on voter turnout, there are major limitations to consider. First of all, as mentioned during the data preparation section, there were some observations that had to be modified and some were dropped. While the overall number was small, this still has the potential to skew the results. Secondly, there are a significant number of observations where demographic features are unknown. If the true demographic characteristics for these voters were known, it's possible that this could shift our model, either erasing or exacerbating demonstrated effects. Finally, and perhaps most critically, this analysis only covers registered voters, not eligible voters. This casts a specific lens on the interpretation of this analysis. For example, while we demonstrate that registered Hispanic people are less likely to vote than registered non-Hispanic people, if eligible Hispanic voters are much more likely to register, then the turnout rate of eligible Hispanic voters could actually be higher than non-Hispanic voters. The results of this analysis are certainly valuable, but also deserve careful interpretation given these specific limitations.
+
+\newpage
+
+# Appendix 1: Final Model Results
+
+![Final Model Output](plot.png){height=73%}
+
+\newpage
+
+# Appendix 2: Random Effect Plots
+
+```{r, echo = FALSE, out.width = '50%', fig.align = 'center', fig.cap = c("Dot Plot of Random Intercepts",  "Dot Plot of Random Slopes: Black", "Dot Plot of Random Slopes: Unknown")}
+
+p1 <-dotplot(ranef(final_model, condVar=TRUE), xlim = c(-.7,.7))$county_desc
+p1[1] 
+p2 <- dotplot(ranef(final_model, condVar=TRUE), xlim = c(-.5,.5))$county_desc
+p2[2]
+p3<- dotplot(ranef(final_model, condVar=TRUE), xlim = c(-1.1,1.1))$county_desc
+p3[3]
+```
+
+
+\clearpage
+
+# Appendix 3: Interactions and Predicted Probability
+
+```{r, echo = FALSE, out.width = '50%', fig.cap = c("Interaction of Age and Party", "Interaction of Sex and Party"), fig.align = 'center', echo = FALSE, results='hide'}
+plot_model(final_model, type = 'int', title = 'Predicted Probabilities of Voting by Age and Party', axis.title = list('Party', 'Probability of Voting'))[1]
+plot_model(final_model, type = 'int', title = 'Predicted Probabilities of Voting by Sex and Party', axis.title = list('Party', 'Probability of Voting'))[2]
+```

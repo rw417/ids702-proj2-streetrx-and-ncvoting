@@ -1,0 +1,513 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={Street Price of Lorazepam},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+
+\title{Street Price of Lorazepam}
+\author{Raza Lamb (Coordinator), Robert Wan (Writer)\\
+Team: Erika Fox (Programmer), Minjung Lee (Presenter), Preet Khowaja
+(Checker),}
+\date{10/24/2021}
+
+\begin{document}
+\maketitle
+
+\hypertarget{summary}{%
+\subsection{Summary}\label{summary}}
+
+Using a hierarchical linear regression model and data reported by
+citizens anonymously, we investigated the factors that impact the per mg
+price on the street of Lorazepam in the United States. We found that the
+street price is most impacted by the dosage strength per unit, with
+stronger pills generally costing less per mg. The street prices in most
+states are similar, although 6 states have street prices that are
+statistically different from the national average.
+
+\hypertarget{introduction}{%
+\subsection{Introduction}\label{introduction}}
+
+Some studies place the size of the street market of diverted
+pharmaceutical substances at around \$400 billion per year. However, it
+is an opaque market where player activities are actively concealed and
+pricing dynamics are often not well understood. A good understanding of
+the prices of drugs on the street can be helpful for public health
+officials as they seek to combat substance abuse issues.
+
+In this study, we investigated on the street price of Lorazepam.
+Lorazepam is a benzodiazepine that is used to treat anxiety disorders.
+Abuse of Lorazepam has been associated with a number of health issues,
+including impaired muscular coordination and memory loss. In the United
+States, Lorazepam is a Schedule IV controlled substance that can be
+legally acquired only through prescriptions, which creates a demand on
+the street for the drug. Specifically, we sought to understand what
+factors are associated with the street price of Lorazepam in the United
+States, and how street price varies by state.
+
+\hypertarget{data}{%
+\subsection{Data}\label{data}}
+
+\hypertarget{data-source}{%
+\subsubsection{Data Source}\label{data-source}}
+
+For this analysis, we got our data from StreetRx (streetrx.com).
+StreetRx is a web-based citizen reporting tool that allows people to
+anonymously report the street price of diverted pharmaceutical
+substances they are aware of or have purchased. Using user-generated
+data allows us to get insights about an otherwise opaque market.
+However, we have to be weary about potentially incorrect values in the
+data set because the data points have not been double-checked.
+
+\hypertarget{code-book}{%
+\subsubsection{Code Book}\label{code-book}}
+
+\begin{itemize}
+\tightlist
+\item
+  \(ppm\): price per mg or Lorazepam, in USD
+\item
+  \(state\): the US state that the user entered
+\item
+  \(USA\_region\): the region of the US based on the state
+\item
+  \(source\): the source that the user got the price
+\item
+  \(form\): the formulation of the drug
+\item
+  \(mgstr\): dosage strength of the drug purchased, in mg / unit
+\item
+  \(bulk\_purchase\): 1 if the purchase was of 10+ units, 0 otherwise
+\end{itemize}
+
+\hypertarget{data-cleaning}{%
+\subsubsection{Data Cleaning}\label{data-cleaning}}
+
+Since the data was reported by individual users instead of collected by
+professionals, some data points might be incorrect. We found a few
+problems with the data set and took measures to address them, which are
+listed below.
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Dropped observations with \(ppm\) above \$100/mg}: around 20
+  observations have prices of over \$100/mg, with a few as high as
+  \$400/mg. The average price of Lorazepam is around \$1/mg in
+  pharmacies, so prices in the hundreds are likely due to mistakes in
+  reporting. However, since there is not an authoritative source of the
+  real price of Lorazepam, we wanted to be conservative in deciding
+  which prices were errorneous. By dropping observations with \(ppm\)
+  above \$100/mg, we dropped 0.3\% of observations, which we believed
+  strike a good balance between keeping the data clean and retaining
+  enough information.
+\item
+  \textbf{Dropped observations with strength above 2.5mg/unit}: two
+  observations had strength (dosage strength per unit) above 2.5mg/unit.
+  Lorazepam is offered in strengths from 0.5mg/unit to 2.5mg/unit. Since
+  only two observations had strength above 2.5mg/unit, we were
+  comfortable with removing both observations.
+\item
+  \textbf{Dropped observations where the \(source\) have fewer than 5
+  reported prices of Lorazepam}: because users were allowed to enter
+  their source in free text form, some sources were web urls or had
+  unique names. This resulted in many distinct values of the \(source\)
+  variables with five or fewer observations. A total of 28 observations
+  were like this. These observations would not be useful for building
+  the model, and we dropped them because they made up less than 0.5\% of
+  the data set.
+\item
+  \textbf{Transformed \(mgstr\) into a factor variable}: because there
+  are only 4 distinct values of \(mgstr\), we transformed it into a
+  factor variable, named \(mgstr_factor\).
+\item
+  \textbf{Combined states / territories with 10 or fewer observations
+  into one group}: American Samoa, Washington DC, Virgin Islands, and
+  Wyoming had 10 or fewer observations. We combined these four states /
+  territories into one group to avoid problems caused by small sample
+  sizes.
+\end{enumerate}
+
+\hypertarget{exploratory-data-analysis}{%
+\subsubsection{Exploratory Data
+Analysis}\label{exploratory-data-analysis}}
+
+The variable we would like to use as the response variable of the model,
+\(ppm\), is a continuous variable, so it would make most sense to use a
+linear regression. As such, we first checked if \(ppm\) follows a normal
+distribution. It turns out that having removed observations with \(ppm\)
+\textgreater{} \$100, the distribution of \(ppm\) was still not normal.
+On the other hand, the natural log of \(ppm\), named \(ppm_log\),
+followed a normal distribution, as shown in Figure 1. We decided to use
+it as the response variable instead.
+
+\begin{center}\includegraphics[width=0.7\linewidth]{lorazepam_price_files/figure-latex/log ppm-1} \end{center}
+
+Having finalized the response variable to use, we moved on to
+investigate potential predictor variables for the model. Our data set
+includes two location variables, \(state\) and \(USA_region\). This
+prompted us to consider creating a hierarchical model group by
+geography. We explored weather the average \(ppm_log\) differed by those
+two variables, We found that \(ppm_log\) differed substantially by
+\(state\), but there were no discernible differences between each
+\(USA_region\). As such, we believed it would be helpful to group by
+\(state\) in the model but not as helpful to group by \(USA_region\). We
+would take another look at the hierarchies when we construct the model.
+
+We then looked at other variables in the data set, namely \(source\),
+\(form\), \(mgstr_factor\), and \(bulk_purchase\). All Lorazepams in the
+data set come in the form of pill/tablet, so we discarded this variable
+for modeling. The remaining three variables all seemed be correlated
+with \(ppm_log\) to a degree, so we decided to include all of them in
+the null model we would build.
+
+In terms of interaction variables, we did not find many interactions to
+be interesting - for most interactions, the pattern of average
+\(ppm_log\) did not change between the groups created by the
+interactions. However, we found one interaction that could be worth to
+further investigate. As shown in Figure 2, the effect of
+\(bulk_purchcase\) appeared to differ by state. Lorazepam bought through
+bulk purchases had high prices in states like Idaho, whereas it cost
+less in states such as Maryland. This suggests that we could explore
+wether adding a varying slope by \(bulk_purchase\) would improve the
+model.
+
+\begin{center}\includegraphics[width=0.75\linewidth]{lorazepam_price_files/figure-latex/interactions-1} \end{center}
+
+\hypertarget{model}{%
+\subsection{Model}\label{model}}
+
+The final model we selected was a hierarchical linear regression model
+with varying intercepts for each state. The fixed effects predictors
+were source, bulk purchase, and dosage strength as a factor variable,
+and there was no interaction variable. In this model, each state has its
+own intercept, which is an effect in addition to the common intercept.
+The formal representation of the model is: \[
+\begin{aligned}
+y_{ij} & = (\beta_{0} + \gamma_{0j}) + \beta_1 source_{ij} + \beta_2 bulk\_purchase_{ij} + \beta_3 mgstr\_factor_{ij} + \epsilon_{ij}; \ \ \ i = 1, \ldots, n_j; \ \ \ j = 1, \ldots, 51 \\
+\epsilon_{ij} & \sim N(0, \sigma^2) \\
+\gamma_{0j} & \sim N(0, \tau_{state}^2)
+\end{aligned}
+\]
+
+\hypertarget{variable-selection}{%
+\subsubsection{Variable Selection}\label{variable-selection}}
+
+The final model shown above was actually the base model we started model
+selection with. Since we were sure that we would like to build a
+hierarchical model grouped at the state level, we started model
+selection with this model, which has no interactions and one varying
+intercept by the state variable.
+
+Even though we did not find any interesting interaction for fixed
+effects in the EDA, we added interactions terms to the model in order to
+ensure that we did not miss important predictors. We performed ANOVA
+tests to compare the base model and models with interaction terms. It
+turned out that no interaction term we attempted to add improved the
+model fit in a statistically significant way. As such, we decided to not
+include any interaction term for fixed effected in the final model.
+
+In the EDA, we found that the interaction between \(bulk_purchase\) and
+\(state\) could be worth further investigations. As such, we added a
+varying slope for \(bulk_purchase\) grouped by \(state\). However, we
+got singular fits when we tried to train the model regardless of the
+optimizer we used in the lmer() function. This indicated that the model
+likely suffered from overfit issues when we added the varying slope. The
+structure of the random effects we tried to model was too complex to be
+supported by the amount of data we had. That was entirely reasonable
+since we had a little over 6,000 observations in the data set and
+\(state\) already split the data into 51 groups. Therefore, we resorted
+to using only a varying intercept for \(state\) and no varying slope.
+
+\hypertarget{model-asesssment}{%
+\subsubsection{Model Asesssment}\label{model-asesssment}}
+
+To assess the four assumptions of linear regression, we first looked at
+a scatterplot of residual vs fitted values. Residuals were evenly
+scattered around 0 and did not have any pattern with respect to fitted
+values. As such, the model passed the independence assumption and the
+equal variance assumption. We also did not notice any influential
+outliers from the plot. The linearity assumption does not apply to our
+model because all predictors are factor variables.
+
+Things become trickier regarding the normality assumption. The x and y
+axes of the QQ plot below represent the theoretical and actual z-scores
+of each residual. Residuals with theoretical z-scores between -1.5 and
+1.5 lie on the QQ line, which translates to roughly 88\% of residuals
+following a normal distribution. Residuals with more extreme values tend
+to spread out more than what we would expect from a normal distribution.
+Since the data set still includes some extreme values for ppm, this is
+not unexpected - however, this would be worth diving deeper in future
+research and could possibly be resolved as we gather more data and
+become more confident on a reasonable range for the street price for
+Lorazepam.
+
+\begin{center}\includegraphics[width=0.75\linewidth]{lorazepam_price_files/figure-latex/assess_2-1} \end{center}
+
+\hypertarget{results-and-interpretation}{%
+\subsubsection{Results and
+Interpretation}\label{results-and-interpretation}}
+
+A table of model coefficients and a plot showing the random intercept of
+each state are included in the appendix. For fixed effects, the factor
+variable for dosage strength, \(mgstr\_factor\), is the most influential
+predictor. Pills with higher dosages generally have a lower price per
+milligram than pills with lower dosages. Holding all else equal,
+compared to pills with a dosage strength of 0.5mg / unit, 1mg / unit
+pills cost 45.05\% less per mg, and 2mg / unit pills cost 64.56\% less
+per mg The highest dosage pills, with a strength of 2.5mg / unit,
+constitute only 1.7\% of all observations, which suggests that there
+might be less supply of pills with such a high dosage. It also means
+that we would not be able to infer the ppm of these pills as accurately.
+As such, the ppm of 2.5mg / unit pills is slightly higher than the ppm
+of 2mg / unit pills - compared to 0.5mg / unit pills, 2.5mg / unit pills
+cost only 60.36\% less per mg. At the 0.05 level, other fixed effects
+are not statistically significant. However, the coefficient of
+\(bulk\_purchase\) is significant at the 0.1 level, and drugs purchased
+in bulk are 5.78\% cheaper per mg, holding all else equal.
+
+For random effects, the standard deviation of the varying intercept is
+0.1159 while the standard deviation of the residuals is 0.9264. The
+varying intercept by state explains 12.51\% of the variation of ppm,
+while the fixed effects explain the remaining variations in ppm within
+each state. The confidence intervals of the intercept for most states
+include 0, so the baseline price in most states are not significantly
+different from the average baseline price of the country. However, a few
+states have prices that are statistically different from the average
+price of the country - all else held equal, baseline prices in NJ, FL,
+and CA are much higher than the national average and baseline prices in
+MI, PA, and IA are much lower.
+
+\hypertarget{conclusion}{%
+\subsection{Conclusion}\label{conclusion}}
+
+In this study, we found that the most influential factor of the street
+per mg price of Lorazepam is the dosage strength. For pills with
+strengths between 0.5mg / unit and 2mg / unit, higher strength
+translates to lower per mg prices. However, pills with the highest
+dosage strength, 2.5mg / unit, cost slightly more than pills with 2mg /
+unit, which is likely due to limited supply on the street. Purchasing
+Lorazepam in bulk does tend to lower the per mg price, yet the effect is
+not significant at the 0.05 level, and the magnitude of the effect does
+not appear to be scientifically meaningful. The location of the
+transaction does not play a meaningful role in determining the street
+price of Lorazepam. While a few states have statistically different
+baseline per mg prices than the national average baseline, most states
+have similar prices.
+
+\hypertarget{limitations}{%
+\subsubsection{Limitations}\label{limitations}}
+
+As previously mentioned, one of the biggest limitations of this analysis
+is the source of our data, in that all the information we have is
+user-generated and therefore unreliable. User-generated data tends to
+have many quality issues. Although we have dropped observations that we
+believed to be wrong, we could never be absolutely sure that the data is
+free of errors. This problem is exacerbated because we do not know the
+true range of the street price of Lorazepam. On one hand, we might have
+not dropped all observations with wrong prices. On the other hand, we
+might have dropped observations that actually had correct values, but
+they were too extreme that we thought they were incorrect.
+
+Our study could also benefit from having more data. Some states have
+number of observations in the high tens. As mentioned in the modeling
+section, the model suffered from overfit issues when we tried to add
+varying slopes. If we had more data, we might be able to fit more
+complex models so that we can infer price more accurately. In addition,
+for this analysi, we assumed that the log of ppm has a normal
+distribution. However, the QQ plot showed that residuals on both ends
+deviated from a normal distribution. More data might better tell us what
+the real distribution of street price is so that we can fit an
+appropriate regression model.
+
+\newpage
+
+\hypertarget{appendix-1-model-coefficients}{%
+\subsection{Appendix 1: Model
+Coefficients}\label{appendix-1-model-coefficients}}
+
+~
+
+ppm log
+
+Predictors
+
+Estimates
+
+CI
+
+p
+
+(Intercept)
+
+1.63
+
+1.57~--~1.69
+
+\textless0.001
+
+source {[}Heard it{]}
+
+-0.06
+
+-0.13~--~0.01
+
+0.122
+
+source {[}Internet{]}
+
+-0.08
+
+-0.22~--~0.05
+
+0.232
+
+source {[}InternetPharmacy{]}
+
+0.15
+
+-0.02~--~0.33
+
+0.083
+
+source {[}Personal{]}
+
+0.00
+
+-0.05~--~0.06
+
+0.879
+
+bulk purchase {[}1 Bulkpurchase{]}
+
+-0.06
+
+-0.12~--~0.00
+
+0.066
+
+mgstr factor {[}1{]}
+
+-0.60
+
+-0.65~--~-0.55
+
+\textless0.001
+
+mgstr factor {[}2{]}
+
+-1.04
+
+-1.11~--~-0.97
+
+\textless0.001
+
+mgstr factor {[}2 5{]}
+
+-0.93
+
+-1.11~--~-0.74
+
+\textless0.001
+
+Random Effects
+
+σ2
+
+0.86
+
+τ00 state
+
+0.01
+
+ICC
+
+0.02
+
+N state
+
+51
+
+Observations
+
+6075
+
+Marginal R2 / Conditional R2
+
+0.140 / 0.153
+
+\newpage
+
+\hypertarget{appendix-2-varying-intercept-of-each-state}{%
+\subsection{Appendix 2: Varying Intercept of Each
+State}\label{appendix-2-varying-intercept-of-each-state}}
+
+\begin{center}\includegraphics{lorazepam_price_files/figure-latex/unnamed-chunk-3-1} \end{center}
+
+\newpage
+
+\hypertarget{appendix-3-residuals-vs-fitted-values-of-final-model}{%
+\subsection{Appendix 3: Residuals vs Fitted Values of Final
+Model}\label{appendix-3-residuals-vs-fitted-values-of-final-model}}
+
+\begin{center}\includegraphics[width=1\linewidth]{lorazepam_price_files/figure-latex/unnamed-chunk-4-1} \end{center}
+
+\end{document}

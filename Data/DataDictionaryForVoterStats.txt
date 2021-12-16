@@ -1,0 +1,81 @@
+/* *******************************************************************************
+* name:     voter_stats_layout.txt
+* purpose:  Voter statistics export file data Layout
+* updated:  03/13/2017
+* format:   tab delimited
+******************************************************************************* */
+
+------------------------------------------------------------------------------------
+name                    data type          description
+------------------------------------------------------------------------------------
+county_desc		char(20)	County name/description	
+precinct_abbrv		char(15)	Precinct abbreviation. Precincts are the lowest-level of grouping for a city, town or county. The county commission divides the county into precincts for the purpose of voting. A precinct must have visible, definable and observable physical boundaries that conform to standards set by the U.S. Bureau of the Census for defining census blocks for their census.
+vtd_abbrv		char(6)		Voter tabulation district abreviation. Voting districts as defined by the US Census to include the wide variety of small polling areas, such as election districts, precincts, or wards, that State and local governments create for the purpose of administering elections. The voting districts are not strictly equal to the precincts so that multiple precincts can map to the same voting district. 
+age			char(50)	Age group
+party_cd		char(10)	Party of the registered voter
+race_code		char(1)		Race code
+ethnic_code		char(2)		Ethnic code
+sex_code		char(1)		Sex code
+total_voters		char(4)		Count of total voters (in grouping)
+election_date		char(10)	Election date (MM/DD/YYYY)
+stats_type		char(10)	Type of voter statistic
+update_date		char(10)	Date stats updated
+-- ------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------
+Age Groups
+------------------------------------------------------------------------------------
+name                   description
+-- -----------------------------------
+Age < 18 Or Invalid Birth Dates
+Age 18 - 25
+Age 26 - 40
+Age 41 - 65
+Age Over 66
+------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------
+Party 
+------------------------------------------------------------------------------------
+name                   description
+-- -----------------------------------
+DEM	               DEMOCRATIC
+LIB	               LIBERTARIAN
+REP	               REPUBLICAN
+UNA	               UNAFFILIATED
+-- ------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------
+Race 
+------------------------------------------------------------------------------------
+name                   description
+-- -----------------------------------
+A	               ASIAN
+B	               BLACK or AFRICAN AMERICAN
+I	               INDIAN AMERICAN or ALASKA NATIVE
+M	               TWO or MORE RACES
+O	               OTHER
+U	               UNDESIGNATED
+W	               WHITE
+-- ------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------
+Ethnicity
+------------------------------------------------------------------------------------
+name                   description
+-- -----------------------------------
+HL	               HISPANIC or LATINO
+NL	               NOT HISPANIC or NOT LATINO
+UN	               UNDESIGNATED
+-- ------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------
+Sex/gender
+------------------------------------------------------------------------------------
+code                   description
+-- -----------------------------------
+F	               FEMALE
+M	               MALE
+U	               UNDESIGNATED
+-- ------------------------------------------------------------------------------
