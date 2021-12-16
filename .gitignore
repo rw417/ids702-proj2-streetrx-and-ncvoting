@@ -4,3 +4,4 @@
 .DS_Store
 *.key
 *.Rproj
+"Data/streetrx.Rdata" 
